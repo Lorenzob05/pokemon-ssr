@@ -3,6 +3,10 @@ import { PokemonListComponent } from "../../pokemons/components/pokemon-list/pok
 import { PokemonListSkeletonComponent } from './ui/pokemon-list-skeleton/pokemon-list-skeleton.component';
 import { PokemonsService } from '../../pokemons/services/pokemons.service';
 import { SimplePokemon } from '../../pokemons/interfaces';
+import {toSignal} from '@angular/core/rxjs-interop'
+import { ActivatedRoute, Router } from '@angular/router';
+import { map, tap } from 'rxjs';
+import { Title } from '@angular/platform-browser';
 
 @Component({
   selector: 'app-pokemons',
@@ -12,10 +16,22 @@ import { SimplePokemon } from '../../pokemons/interfaces';
   changeDetection: ChangeDetectionStrategy.OnPush,
 })
 export default class PokemonsComponent implements OnInit {
-  // public isLoading = signal(true)
+  public isLoading = signal(true)
+
+  private title = inject(Title)
 
   private pokemonService = inject(PokemonsService)
   public pokemons = signal<SimplePokemon[]>([])
+
+  private route = inject(ActivatedRoute)
+
+  private router = inject(Router)
+
+  public currentPage = toSignal<number>(
+    this.route.queryParamMap.pipe(
+      map(params => Number(params.get('page')) || 1)
+    )
+  )
 
   ngOnInit(): void {
     this.loadPokemons()
@@ -25,7 +41,15 @@ export default class PokemonsComponent implements OnInit {
   }
 
   public loadPokemons(page = 0){
-    this.pokemonService.loadPage(page).subscribe((pokemons) =>{
+
+    const pageLoad = this.currentPage()! + page
+
+    this.pokemonService.loadPage(pageLoad)
+    .pipe(
+      tap(() => this.router.navigate([], {queryParams: {page: pageLoad}})),
+      tap(() => this.title.setTitle(`Pokemon SSR - Page ${pageLoad}`))
+    )
+    .subscribe((pokemons) =>{
       this.pokemons.set(pokemons)
     })
   }
