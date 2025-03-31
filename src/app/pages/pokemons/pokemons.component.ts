@@ -1,21 +1,21 @@
-import { ChangeDetectionStrategy, Component, inject, OnInit, signal, SimpleChange } from '@angular/core';
+import { ChangeDetectionStrategy, Component, effect, inject, OnInit, signal, SimpleChange } from '@angular/core';
 import { PokemonListComponent } from "../../pokemons/components/pokemon-list/pokemon-list.component";
 import { PokemonListSkeletonComponent } from './ui/pokemon-list-skeleton/pokemon-list-skeleton.component';
 import { PokemonsService } from '../../pokemons/services/pokemons.service';
 import { SimplePokemon } from '../../pokemons/interfaces';
 import {toSignal} from '@angular/core/rxjs-interop'
-import { ActivatedRoute, Router } from '@angular/router';
+import { ActivatedRoute, Router, RouterLink } from '@angular/router';
 import { map, tap } from 'rxjs';
 import { Title } from '@angular/platform-browser';
 
 @Component({
   selector: 'app-pokemons',
   standalone: true,
-  imports: [PokemonListComponent, PokemonListSkeletonComponent],
+  imports: [PokemonListComponent, PokemonListSkeletonComponent,RouterLink],
   templateUrl: './pokemons.component.html',
   changeDetection: ChangeDetectionStrategy.OnPush,
 })
-export default class PokemonsComponent implements OnInit {
+export default class PokemonsComponent{
   public isLoading = signal(true)
 
   private title = inject(Title)
@@ -28,26 +28,31 @@ export default class PokemonsComponent implements OnInit {
   private router = inject(Router)
 
   public currentPage = toSignal<number>(
-    this.route.queryParamMap.pipe(
-      map(params => Number(params.get('page')) || 1)
+    this.route.params.pipe(
+      map((params) => params['page']?? '1'),
+      map((page) => (isNaN(+page) ? 1 : +page)),
+      map((page) => Math.max(1, page))
     )
-  )
+  );
 
-  ngOnInit(): void {
-    this.loadPokemons()
-    // setTimeout(() => {
-    //   this.isLoading.set(false)
-    // }, 1500);
-  }
+  public loadOnPageChange = effect(() => {
+    this.loadPokemons(this.currentPage())
+  }, {allowSignalWrites: true})
+
+  // ngOnInit(): void {
+  //   this.loadPokemons()
+  //   // setTimeout(() => {
+  //   //   this.isLoading.set(false)
+  //   // }, 1500);
+  //   console.log(this.currentPage())
+  // }
 
   public loadPokemons(page = 0){
 
-    const pageLoad = this.currentPage()! + page
-
-    this.pokemonService.loadPage(pageLoad)
+    this.pokemonService.loadPage(page)
     .pipe(
-      tap(() => this.router.navigate([], {queryParams: {page: pageLoad}})),
-      tap(() => this.title.setTitle(`Pokemon SSR - Page ${pageLoad}`))
+      // tap(() => this.router.navigate([], {queryParams: {page: pageLoad}})),
+      tap(() => this.title.setTitle(`Pokemon SSR - Page ${page}`))
     )
     .subscribe((pokemons) =>{
       this.pokemons.set(pokemons)
